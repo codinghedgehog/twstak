@@ -18,9 +18,10 @@ import os
 import pyautogui
 from time import sleep
 
-VERSION="1.0"
+VERSION="1.1"
     
 macros = {}
+macro_list = []
 TYPESPEED=0.05
 DELAY_CHAR="`"
 DELAY=1
@@ -45,7 +46,7 @@ def do_main_menu():
         print("dv) Set macro delay char value (Currently: {0} seconds)".format(DELAY))
         print("td) Set inter-character typing delay (Currently {0} seconds)".format(TYPESPEED))
         print()
-        print("f) Toggle FAILSAFE (aborts macro on mouse movement); Currently {0}".format(FAILSAFE))
+        print("f) Toggle FAILSAFE (aborts macro on mouse movement): Currently {0}".format(FAILSAFE))
         print()
         print("q) Quit")
         print()
@@ -63,7 +64,7 @@ def do_main_menu():
             TYPESPEED=float(input("Enter delay between keystrokes, in seconds (float value allowed): "))
         elif selection == "f":
             FAILSAFE = not FAILSAFE
-        elif len(macros) == 0:
+        elif len(macro_list) == 0:
             print("No macros defined.")
         elif selection == "l":
             list_macros()
@@ -85,7 +86,7 @@ def list_macros():
     print("---- Macros ----")
     print()
     i = 1
-    for macro in macros:
+    for macro in macro_list:
         print("{0}. {1} = {2}".format(str(i),macro,macros[macro]['seq']))
         i = i + 1
         
@@ -104,6 +105,7 @@ def create_macro():
     print()
     macro_name = input("Enter name of macro: ")
     macros[macro_name] = {'x': mouse_x, 'y': mouse_y, 'seq': macro_seq}
+    macro_list.append(macro_name)
     print("Macro {0} defined.".format(macro_name))      
 
 def run_macro(repeat=1):
@@ -113,7 +115,7 @@ def run_macro(repeat=1):
     print()
     i = 1
     mapping={}
-    for macro in macros:
+    for macro in macro_list:
         print("{0}. {1}".format(str(i),macro))
         mapping[str(i)] = macros[macro]
         i = i + 1
@@ -133,38 +135,43 @@ def run_macro(repeat=1):
     selected_macro =  mapping[selection]
     
     print()
-    
-    pyautogui.moveTo(selected_macro['x'],selected_macro['y'])
-    pyautogui.click()
 
-    i=0
-    while i < repeat:
-        
-        #pyautogui.typewrite(selected_macro['seq'].encode('utf-8').decode('unicode_escape'), interval=TYPESPEED)
-        seq_list = selected_macro['seq'].split(DELAY_CHAR)
-        
-        for index in range(len(seq_list)):
+    try:
+        pyautogui.moveTo(selected_macro['x'],selected_macro['y'])
+        pyautogui.click()
+
+        i=0
+        while i < repeat:
             
-            # FAILSAFE: Make sure mouse hasn't moved a significant amount (and potentially lost focus to target window),
-            # when sending macro sequences.
-            mouse_x, mouse_y = pyautogui.position()
-            diffx = abs(mouse_x - selected_macro['x'])
-            diffy = abs(mouse_y - selected_macro['y'])
-            if FAILSAFE and ((diffx > FAILSAFE_DISTANCE) or (diffy > FAILSAFE_DISTANCE)):
-                print("*** FAILSAFE TRIGGERED (mouse moved): Aborting macro")
-                return
+            #pyautogui.typewrite(selected_macro['seq'].encode('utf-8').decode('unicode_escape'), interval=TYPESPEED)
+            seq_list = selected_macro['seq'].split(DELAY_CHAR)
             
-            pyautogui.typewrite(seq_list[index].encode('utf-8').decode('unicode_escape'),interval=TYPESPEED)
-            #for key in seq_list[index].encode('utf-8').decode('unicode_escape'):
-            #   pyautogui.press(key)
+            for index in range(len(seq_list)):
+                
+                # FAILSAFE: Make sure mouse hasn't moved a significant amount (and potentially lost focus to target window),
+                # when sending macro sequences.
+                mouse_x, mouse_y = pyautogui.position()
+                diffx = abs(mouse_x - selected_macro['x'])
+                diffy = abs(mouse_y - selected_macro['y'])
+                if FAILSAFE and ((diffx > FAILSAFE_DISTANCE) or (diffy > FAILSAFE_DISTANCE)):
+                    print("*** FAILSAFE TRIGGERED (mouse moved off x,y): Aborting macro")
+                    return
+                
+                pyautogui.typewrite(seq_list[index].encode('utf-8').decode('unicode_escape'),interval=TYPESPEED)
+                #for key in seq_list[index].encode('utf-8').decode('unicode_escape'):
+                #   pyautogui.press(key)
 
-            # Don't delay after last subsequence is sent
-            if index < len(seq_list) - 1:                
-                sleep(DELAY)
+                # Don't delay after last subsequence is sent
+                if index < len(seq_list) - 1:                
+                    sleep(DELAY)
 
-        i = i + 1
+            i = i + 1
 
-        print("Times run: {0} (moving mouse aborts)".format(i))
+            print("Times run: {0} (moving mouse to upper left screen corner aborts)".format(i))
+    except pyautogui.FailSafeException:
+        print("*** FAILSAFE TRIGGERED (screen corner hit): Aborting macro")
+        return
+
 
         
 def delete_macro():
@@ -174,7 +181,7 @@ def delete_macro():
     print()
     i = 1
     mapping={}
-    for macro in macros:
+    for macro in macro_list:
         print("{0}. {1}".format(str(i),macro))
         mapping[str(i)] = macro
         i = i + 1
@@ -193,6 +200,7 @@ def delete_macro():
         return
 
     del macros[mapping[selection]]
+    macro_list.remove(mapping[selection])
     
     print("Deleted macro {0}".format(mapping[selection]))
     
