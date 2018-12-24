@@ -104,8 +104,16 @@ def create_macro():
     macro_seq = input("Step 2: Enter the key sequence you want to transmit to the target screen (may use \\n for ENTER): ")
     print()
     macro_name = input("Enter name of macro: ")
+
+    if macro_name in macros:
+        overwrite = input("{0} already exists.  Overwrite? y/n ".format(macro_name))
+        if overwrite != 'y':
+            print("Cancelled.")
+            return
+    
     macros[macro_name] = {'x': mouse_x, 'y': mouse_y, 'seq': macro_seq}
-    macro_list.append(macro_name)
+    if macro_name not in macro_list:
+        macro_list.append(macro_name)
     print("Macro {0} defined.".format(macro_name))      
 
 def run_macro(repeat=1):
