@@ -6,3 +6,17 @@ This is a Python 3 (3.6) script that uses the PyAutoGUI library to allow the def
 WARNING: IT IS FINICKY -- You MUST NOT move the TW2002 term window once you've defined the macro (it records the screen coordinates to click with the mouse prior to sending the keystrokes).  You also must not change focus to another window when a macro is running, otherwise the app will start sending keystrokes to whatever has focus.
 
 NOTE: To abort the macro/app, move your mouse to the upper left most corner of the screen.  That's the failsafe.
+
+# twstak-explorer
+TradeWars 2002 Simple Telnet Auto Keyer (Explorer app)
+
+This is a Python 3 (3.6) script based on TWSTAK that reads scans your Explored/Unexplored sector list, then calculates which sectors to send SubSpace EtherProbes to cover the largest number of unexplored sectors.
+
+NOTE: This requires your terminal program to log printable output to a file for the script to read.
+
+# twstak-trader
+TradeWars 2002 Simple Telnet Auto Keyer (Trader app)
+
+This is a Python 3 (3.6) script based on TWSTAK that performs paired port trading, based on the input of two sectors with viable ports in them.  It is semi-intelligent at the moment -- you can tell it stop when you have X number of turns left, and it will attempt to buy/sell the most valuable commodities first (Equipment, then Organics, finally Ore).
+
+NOTE: This requires your terminal program to log printable output to a file for the script to read.
