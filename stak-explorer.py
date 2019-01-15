@@ -17,7 +17,7 @@ import os
 import pyautogui
 from time import sleep
 
-VERSION="1.0"
+VERSION="1.1"
 INPUT_FILE="C:\\Temp\\tw2002a.log"
     
 TYPESPEED=0.05
@@ -194,6 +194,9 @@ def analyze_probe_destinations():
         unexplored_sector_list = sector_output.split()
 
         for sector in unexplored_sector_list:
+            if not re.match("[0-9]+",sector):
+                continue
+            
             pyautogui.typewrite("f")
             waitfor("^What is the starting sector",logfile)
 
