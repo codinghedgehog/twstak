@@ -18,7 +18,7 @@ import pyautogui
 from time import sleep
 
 
-# Takes a match object from commerceReportRe regex to initialize.
+# Takes a match object from commerceReportRe or CIMPortReportRe regex to initialize.
 class Starport:    
     
     def __init__(self,sector,commerceReport):
@@ -31,21 +31,38 @@ class Starport:
         self.orgAmt = 0
         self.oreAmt = 0
         self.equAmt = 0
-        
-        if commerceReport.group('oreStatus') == "Selling":
-            self.selling.add("Fuel Ore")
-        else:
-            self.buying.add("Fuel Ore")
 
-        if commerceReport.group('orgStatus') == "Selling":
-            self.selling.add("Organics")
+        if "CIMPortSector" in commerceReport.groupdict():
+            
+            if commerceReport.group('oreStatus') != '-':
+                self.selling.add("Fuel Ore")
+            else:
+                self.buying.add("Fuel Ore")
+
+            if commerceReport.group('orgStatus') != '-':
+                self.selling.add("Organics")
+            else:
+                self.buying.add("Organics")
+                     
+            if commerceReport.group('equStatus') != '-':
+                self.selling.add("Equipment")
+            else:
+                self.buying.add("Equipment")
         else:
-            self.buying.add("Organics")
-                 
-        if commerceReport.group('equStatus') == "Selling":
-            self.selling.add("Equipment")
-        else:
-            self.buying.add("Equipment")
+            if commerceReport.group('oreStatus') == "Selling":
+                self.selling.add("Fuel Ore")
+            else:
+                self.buying.add("Fuel Ore")
+
+            if commerceReport.group('orgStatus') == "Selling":
+                self.selling.add("Organics")
+            else:
+                self.buying.add("Organics")
+                     
+            if commerceReport.group('equStatus') == "Selling":
+                self.selling.add("Equipment")
+            else:
+                self.buying.add("Equipment")            
 
         self.oreAmt = int(commerceReport.group('oreAmt'))
         self.orgAmt = int(commerceReport.group('orgAmt'))
@@ -79,6 +96,7 @@ def do_main_menu():
         print("tl) Set trade limit (Default: Stop when {0} turns left.)".format(TRADE_LIMIT))
         print("an) Auto-trade, NO haggling (CTRL-C to stop)")
         print("ay) Auto-trade, haggling (CTRL-C to stop)")
+        print("ta) Trade Advisor")
         print()
         print("b)  Begin following log file [Used for Debugging] (CTRL-C to stop)")
         print("dc) Set macro delay char (Currently: {0})".format(DELAY_CHAR))
@@ -136,6 +154,11 @@ def do_main_menu():
                 auto_trade(True)
             except KeyboardInterrupt:
                 print("User aborted trade routine...")
+        elif selection == "ta":
+            try:
+                trade_advisor()
+            except KeyboardInterrupt:
+                print("User aborted trade advisor...")                                
         else:
             print("Unknown selection '{0}'".format(selection))
 
@@ -143,6 +166,116 @@ def get_term_coord():
     input("Without losing focus to this window, move your mouse over the titlebar of the terminal window and press ENTER")
     mouse_x,mouse_y = pyautogui.position()
     return (mouse_x,mouse_y)
+
+def trade_advisor():
+    # Uses Computer Interrogation Mode to get list of explored sectors and port info, and advises
+    # which port pairs are available.
+
+    global logfile, CIMPortReportRe
+
+    warpMap = {}
+    portDB = {}
+    
+    print()
+    print("Be sure your terminal program is logging printable output to {0} before continuing.".format(INPUT_FILE))
+    print()
+
+    x,y = get_term_coord()
+
+    yorn = input("Are you already at main command prompt? y/n ").lower()
+    if yorn != "y":
+        print("Please be at the main command (NOT Computer) prompt before mapping.")
+        return
+
+    try:
+        # Enter Computer Interrogation Mode
+        pyautogui.moveTo(x,y)
+        pyautogui.click()
+        
+        pyautogui.typewrite("^")
+
+        # Create map of known universe, using Warp Display.
+        pyautogui.typewrite("i")
+        result,rawData = return_up_to("^:",logfile)
+
+        print(rawData)
+        
+        rawDataList = rawData.split('\n')
+        for line in rawDataList:
+            lineMatch = re.search("^ +(?P<sector>[0-9]+) +(?P<warps>.+)",line)
+            if lineMatch:
+                warpMap[lineMatch.group('sector')] = lineMatch.group('warps').split()
+            
+        #print(warpMap)
+
+        # Load port report
+        pyautogui.typewrite("r")
+        result,rawData = return_up_to("^:",logfile)
+
+        #print(rawData)
+        
+        rawDataList = rawData.split('\n')
+        for line in rawDataList:
+            lineMatch = re.search(CIMPortReportRe,line)
+            if lineMatch:
+                portDB[lineMatch.group('CIMPortSector')] = Starport(lineMatch.group('CIMPortSector'),lineMatch)
+            
+        #for item in portDB.values():
+        #    print(item)
+
+        # Quit Computer Interrogation Mode.
+        pyautogui.typewrite("q")
+
+        # For each port, look to see if there are any adjacent ports that have a viable trade flow.
+        portsDone = []
+
+        for portSector in portDB.keys():
+            # Look for trade routes with adjacent ports.
+            port1 = portDB[portSector]
+            for adjWarp in warpMap[portSector]:
+                if adjWarp in portDB.keys():
+
+                    # Skip if we've done this in one direction already.
+                    if [adjWarp,portSector] in portsDone:
+                        continue
+                    
+                    port2 = portDB[adjWarp]
+                    
+                    # Validate there is a viable commodity trade between the two ports.
+                    port1Buys = port1.selling.intersection(port2.buying)
+                    port2Buys = port2.selling.intersection(port1.buying)
+
+                    # Report amounts, and track sectors visited to avoid double counting.
+                    portsDone.append([port1.sector,port2.sector])
+                    portsDone.append([port2.sector,port1.sector])
+
+                    if not port1Buys and not port2Buys:
+                        continue
+                    else:
+                        print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector))
+                        for commodity in port1Buys:
+                            if commodity == "Fuel Ore":
+                                print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt))
+                            elif commodity == "Organics":
+                                print("  Organics (Selling {0}) -> Organics (Buying {1})".format(port1.orgAmt,port2.orgAmt))
+                            elif commodity == "Equipment":
+                                print("  Equipment (Selling {0}) -> Equipment (Buying {1})".format(port1.equAmt,port2.equAmt))
+
+                        for commodity in port2Buys:
+                            if commodity == "Fuel Ore":
+                                print("  Fuel Ore (Buying {0}) <- Fuel Ore (Selling {1})".format(port1.oreAmt,port2.oreAmt))
+                            elif commodity == "Organics":
+                                print("  Organics (Buying {0}) <- Organics (Selling {1})".format(port1.orgAmt,port2.orgAmt))
+                            elif commodity == "Equipment":
+                                print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt))
+
+                    print()
+        
+        
+    except pyautogui.FailSafeException:
+        print("** ABORTED: Fail safe triggered.")
+        return
+    
 
 def auto_trade(negotiate=False):
 
@@ -173,6 +306,7 @@ def auto_trade(negotiate=False):
     
         pyautogui.typewrite("d")
         waitfor("^Command ",logfile)
+        pyautogui.typewrite("i")
         pyautogui.typewrite("i")
         result,selfInfo = return_up_to("^Command ",logfile)
 
@@ -251,6 +385,9 @@ def auto_trade(negotiate=False):
         port1Buys = port1.selling.intersection(port2.buying)
         port2Buys = port2.selling.intersection(port1.buying)
 
+        #print(port1Buys)
+        #print(port2Buys)
+
         if not port1Buys and not port2Buys:
             print("There are no viable trade plans between these two ports!")
             return
@@ -316,11 +453,11 @@ def auto_trade(negotiate=False):
                     print("Failed to update port2 inventory!")
                     return
             else:
-                print("Port depleted.  Auto-trading stopped.")
+                print("Port depleted or we are carrying invalid cargo for this port.  Auto-trading stopped.")
                 return
 
             if not trade_at_port(port2,port2Buys):
-                print("Turn limit reached.  Auto-trading stopped.")
+                print("Trade exception encountered. Auto-trading stopped.")
                 return
 
             pyautogui.typewrite("d")
@@ -341,27 +478,54 @@ def trade_at_port(port,buys):
 
     print(port)
     
-    result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["do you want to sell","Command"])
+    result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["How many holds of (?P<commodity>.+) do you want to sell","Command"])
     # Sell what we have first.
     if not result and query.string.find("do you want to sell") >= 0:
+        commodity = query.group('commodity')
+        print("Selling {0}".format(commodity))
         pyautogui.typewrite("\n\n")
         
-        result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["do you want to sell","Command"])
+        result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["How many holds of (?P<commodity>.+) do you want to sell","Command"])
         if not result and query.string.find("do you want to sell") >= 0:
+            commodity = query.group('commodity')
+            print("Selling {0}".format(commodity))
             pyautogui.typewrite("\n\n")
             
-            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["do you want to sell","Command"])
+            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile,unless=["How many holds of (?P<commodity>.+) do you want to sell","Command"])
+
             if not result and query.string.find("do you want to sell") >= 0:
+                commodity = query.group('commodity')
+                print("Selling {0}".format(commodity))
                 pyautogui.typewrite("\n\n")
             
     # If port is selling commodities.  If it is a Class 8 (BBB) port, just return, since nothing to buy.
     if buys:
-        currentCommodity = query.group('commodity')
+        # Even if we want to buy from port, make sure there is still inventory to buy!
+        for commodity in buys:
+            if commodity == "Equipment" and port.equAmt > 0:
+                continue
+            if commodity == "Organics" and port.orgAmt > 0:
+                continue
+            if commodity == "Fuel Ore" and port.oreAmt > 0:
+                continue
+
+            # No more inventory to buy, so quit port.
+            print("No more inventory to buy.  Quitting port.")
+            return True
+
+        if query:
+            currentCommodity = query.group('commodity')
+            print("Port offers to sell {0}".format(currentCommodity))
+        else:
+            print("No commodities offered (is our cargo hold full?).")
+            return False
     else:
+        print("Port is Class 8, nothing to buy.  Done.")
         return True
     
     # Only buy what we can sell at the other port, prioritizing equipment, organics, then ore.
     if "Equipment" in buys and port.equAmt > 0:
+        print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
         while currentCommodity != "Equipment":
             pyautogui.typewrite("0\n")
             result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
@@ -375,6 +539,7 @@ def trade_at_port(port,buys):
             return False
         
     elif "Organics" in buys and port.orgAmt > 0:
+        print("We want to buy Organics and port has {0} left.".format(port.orgAmt))
         while currentCommodity != "Organics":
             pyautogui.typewrite("0\n")
             result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
@@ -388,6 +553,7 @@ def trade_at_port(port,buys):
             return False
         
     elif "Fuel Ore" in buys and port.oreAmt > 0:
+        print("We want to buy Fuel Ore and port has {0} left.".format(port.oreAmt))
         while currentCommodity != "Fuel Ore":
             pyautogui.typewrite("0\n")
             result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
@@ -456,8 +622,8 @@ def follow(filename):
 
 if __name__ == "__main__":
 
-    VERSION="1.0"
-    INPUT_FILE="C:\\temp\\tw2002.log"
+    VERSION="1.1"
+    INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
@@ -469,6 +635,8 @@ if __name__ == "__main__":
     TRADE_LIMIT=40
 
     commerceReportRe = "Fuel Ore +(?P<oreStatus>Buying|Selling) +(?P<oreAmt>[0-9]+) .+Organics +(?P<orgStatus>Buying|Selling) +(?P<orgAmt>[0-9]+) .+Equipment +(?P<equStatus>Buying|Selling) +(?P<equAmt>[0-9]+) "
+
+    CIMPortReportRe = "^ +(?P<CIMPortSector>[0-9]+) +(?P<oreStatus>-)? +(?P<oreAmt>[0-9]+) +(?P<orePct>[0-9]+)% +(?P<orgStatus>-)? +(?P<orgAmt>[0-9]+) +(?P<orgPct>[0-9]+)% +(?P<equStatus>-)? +(?P<equAmt>[0-9]+) +(?P<equPct>[0-9]+)%"
 
     logfile = follow(INPUT_FILE)
 
