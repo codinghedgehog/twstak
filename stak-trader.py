@@ -282,7 +282,7 @@ def trade_advisor(reportFile=None):
                     if not port1Buys and not port2Buys:
                         continue
                     else:
-                        print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector))
+                        print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector),file=reportFile)
                         for commodity in port1Buys:
                             if commodity == "Fuel Ore":
                                 print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
@@ -755,7 +755,7 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.2"
+    VERSION="1.21"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
