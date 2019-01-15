@@ -98,8 +98,10 @@ def do_main_menu():
         print("an) Auto-trade, NO haggling (CTRL-C to stop)")
         print("ay) Auto-trade, haggling (CTRL-C to stop)")
         print("ta) Trade Advisor")
+        print("tas) Trade Advisor - Save to file")
         print()
         print("b)  Begin following log file [Used for Debugging] (CTRL-C to stop)")
+        print("g)  Get next line in log file [Used for Debugging]")
         print("dc) Set macro delay char (Currently: {0})".format(DELAY_CHAR))
         print("dv) Set macro delay char value (Currently: {0} seconds)".format(DELAY))
         print("td) Set inter-character typing delay (Currently: {0} seconds)".format(TYPESPEED))
@@ -146,12 +148,15 @@ def do_main_menu():
             print("CTRL-C to stop")
             print()
             try:
-                for line in follow(INPUT_FILE):
+                for line in logfile:
                     print(line)
             except KeyboardInterrupt:
                 print()
                 print("Stopped following file")
                 print()
+        elif selection == "g":
+            print()
+            print(next(logfile))
                 
         elif selection == "an":
             try:                
@@ -167,7 +172,18 @@ def do_main_menu():
             try:
                 trade_advisor()
             except KeyboardInterrupt:
-                print("User aborted trade advisor...")                                
+                print("User aborted trade advisor...")
+        elif selection == "tas":
+            try:
+                fileName = input("Enter path and filename to save: ")
+                try:                    
+                    with open(fileName,"w") as outFile:
+                        trade_advisor(reportFile=outFile)
+                except:
+                    print("Unable to open file {0} for writing!".format(fileName))
+                
+            except KeyboardInterrupt:
+                print("User aborted trade advisor...")            
         else:
             print("Unknown selection '{0}'".format(selection))
 
@@ -176,7 +192,7 @@ def get_term_coord():
     mouse_x,mouse_y = pyautogui.position()
     return (mouse_x,mouse_y)
 
-def trade_advisor():
+def trade_advisor(reportFile=None):
     # Uses Computer Interrogation Mode to get list of explored sectors and port info, and advises
     # which port pairs are available.
 
@@ -197,6 +213,8 @@ def trade_advisor():
         return
 
     try:
+        flush_follow()
+        
         # Enter Computer Interrogation Mode
         pyautogui.moveTo(x,y)
         pyautogui.click()
@@ -267,21 +285,21 @@ def trade_advisor():
                         print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector))
                         for commodity in port1Buys:
                             if commodity == "Fuel Ore":
-                                print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt))
+                                print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
                             elif commodity == "Organics":
-                                print("  Organics (Selling {0}) -> Organics (Buying {1})".format(port1.orgAmt,port2.orgAmt))
+                                print("  Organics (Selling {0}) -> Organics (Buying {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
                             elif commodity == "Equipment":
-                                print("  Equipment (Selling {0}) -> Equipment (Buying {1})".format(port1.equAmt,port2.equAmt))
+                                print("  Equipment (Selling {0}) -> Equipment (Buying {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
 
                         for commodity in port2Buys:
                             if commodity == "Fuel Ore":
-                                print("  Fuel Ore (Buying {0}) <- Fuel Ore (Selling {1})".format(port1.oreAmt,port2.oreAmt))
+                                print("  Fuel Ore (Buying {0}) <- Fuel Ore (Selling {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
                             elif commodity == "Organics":
-                                print("  Organics (Buying {0}) <- Organics (Selling {1})".format(port1.orgAmt,port2.orgAmt))
+                                print("  Organics (Buying {0}) <- Organics (Selling {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
                             elif commodity == "Equipment":
-                                print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt))
+                                print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
 
-                    print()
+                    print("",file=reportFile)
         
         
     except pyautogui.FailSafeException:
@@ -310,24 +328,18 @@ def auto_trade(negotiate=False):
         print("Please be at the main command (NOT Computer) prompt before mapping.")
         return
 
-    try:            
+    try:
+        flush_follow()
+        
         pyautogui.moveTo(x,y)
         pyautogui.click()
 
         # Check current sector and turns remaining
     
-        pyautogui.typewrite("d")
-        waitfor("^Command ",logfile)
-        # For some reason Ship Info goes by too quickly to be picked up by follow generator.
-        # Kludge is to spam it a few times. Ugh.
         pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        pyautogui.typewrite("i")
-        result,selfInfo = return_up_to("^Command ",logfile)
+        result,selfInfo = return_up_to("^Credits ",logfile)
+
+        flush_follow()
 
         #print(selfInfo)
 
@@ -351,6 +363,14 @@ def auto_trade(negotiate=False):
         else:
             print("Unable to collect selfShip turns left information!")
             return
+
+        selfMatch = re.search("Total Holds\s+:\s+(?P<totalHolds>[0-9]+)", selfInfo)
+        if selfMatch:
+            SHIP_HOLDS = int(selfMatch.group('totalHolds'))
+        else:
+            print("Unable to collect selfShip turns left information!")
+            return
+
 
         if currentSector != sector1:
             print("Please have your ship in the starting sector ({0}) before proceeding (you are in sector {1}).".format(sector1,currentSector))
@@ -414,6 +434,8 @@ def auto_trade(negotiate=False):
         # Return to main prompt
         pyautogui.typewrite("q")
 
+        flush_follow()
+
         # Trade back and forth until depleted.
         while turnsLeft > TRADE_LIMIT:
             
@@ -423,7 +445,7 @@ def auto_trade(negotiate=False):
                 print("Turn limit reached.  Auto-trading stopped.")
                 return
 
-            # Trade at port 1
+            # Trade at port 1            
             pyautogui.typewrite("pt")
             
             result,portInfo = return_up_to("You have",logfile,unless=["You don't have anything they want, and they don't have anything you can buy"])
@@ -463,11 +485,11 @@ def auto_trade(negotiate=False):
             if not trade_at_port(port1,port1Buys):
                 print("Trade exception encountered. Auto-trading stopped.")
                 return
-
-            pyautogui.typewrite("d")
+            
             waitfor("^Command",logfile)
 
             # Move to port2 sector
+            print("Moving to sector {0}".format(sector2))
             turnsLeft = turnsLeft - turnsWarp
             if turnsLeft <= TRADE_LIMIT:
                 print("Trade limit reached.  Auto-trading stopped.")
@@ -482,7 +504,8 @@ def auto_trade(negotiate=False):
             if turnsLeft <= TRADE_LIMIT:
                 print("Turn limit reached.  Auto-trading stopped.")
                 return
-            
+
+            # Trade at port 2            
             pyautogui.typewrite("pt")
 
             result,portInfo = return_up_to("You have",logfile,unless=["You don't have anything they want, and they don't have anything you can buy"])
@@ -526,6 +549,7 @@ def auto_trade(negotiate=False):
             waitfor("^Command",logfile)
 
             # Move back to port1 sector
+            print("Moving to sector {0}".format(sector1))
             pyautogui.typewrite("m{0}\n".format(sector1))
             
         
@@ -579,7 +603,7 @@ def trade_at_port(port,buys):
         # No more inventory to buy, so quit port.
         if not buys:
             
-            print("No more inventory to buy.  Quitting port.")
+            print("No more inventory to buy (not enough to fill ship holds).  Quitting port.")
             # Decline purchases from this port.
             if "Fuel Ore" in port.selling and port.oreAmt > 0:
                 pyautogui.typewrite("0\n")
@@ -597,7 +621,7 @@ def trade_at_port(port,buys):
             print("No commodities offered (is our cargo hold full?).")
             return False
     else:
-        print("Nothing to buy.  Done.")
+        print("Nothing to buy in trade plan.  Done.")
 
         # Decline purchases from this port.
         if "Fuel Ore" in port.selling and port.oreAmt > 0:
@@ -610,48 +634,64 @@ def trade_at_port(port,buys):
         return True
             
             
-    # Only buy what we can sell at the other port, prioritizing equipment, organics, then ore.
-    if "Equipment" in buys and port.equAmt > 0:
-        print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
-        while currentCommodity != "Equipment":
-            pyautogui.typewrite("0\n")
-            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
-            currentCommodity = query.group('commodity')
+    # Only buy what we can sell at the other port, prioritizing equipment, organics, then ore,
+    # but only if there is enough to fill our holds, otherwise decline purchase.
+    if "Equipment" in buys:
+        if port.equAmt >= SHIP_HOLDS:
+            print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
+            while currentCommodity != "Equipment":
+                pyautogui.typewrite("0\n")
+                result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+                currentCommodity = query.group('commodity')
 
-        if currentCommodity == "Equipment":
-            pyautogui.typewrite("\n\n")
-            return True
-        else:
-            print("Unexpected commodity offer!")
-            return False
+            if currentCommodity == "Equipment":
+                pyautogui.typewrite("\n\n")
+                return True
+            else:
+                print("Unexpected commodity offer!")
+                return False
+        elif port.equAmt > 0:
+            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+            pyautogui.typewrite("0\n")
         
-    elif "Organics" in buys and port.orgAmt > 0:
-        print("We want to buy Organics and port has {0} left.".format(port.orgAmt))
-        while currentCommodity != "Organics":
-            pyautogui.typewrite("0\n")
-            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
-            currentCommodity = query.group('commodity')
+    if "Organics" in buys:
+        if port.orgAmt >= SHIP_HOLDS:
+            print("We want to buy Organics and port has {0} left.".format(port.orgAmt))
+            while currentCommodity != "Organics":
+                pyautogui.typewrite("0\n")
+                result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+                currentCommodity = query.group('commodity')
 
-        if currentCommodity == "Organics":
-            pyautogui.typewrite("\n\n")
-            return True
-        else:
-            print("Unexpected commodity offer!")
-            return False
+            if currentCommodity == "Organics":
+                pyautogui.typewrite("\n\n")
+                return True
+            else:
+                print("Unexpected commodity offer!")
+                return False
+        elif port.orgAmt > 0:
+            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+            pyautogui.typewrite("0\n")
         
-    elif "Fuel Ore" in buys and port.oreAmt > 0:
-        print("We want to buy Fuel Ore and port has {0} left.".format(port.oreAmt))
-        while currentCommodity != "Fuel Ore":
-            pyautogui.typewrite("0\n")
-            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
-            currentCommodity = query.group('commodity')
+    if "Fuel Ore" in buys:
+        if port.oreAmt >= SHIP_HOLDS:
+            print("We want to buy Fuel Ore and port has {0} left.".format(port.oreAmt))
+            while currentCommodity != "Fuel Ore":
+                pyautogui.typewrite("0\n")
+                result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+                currentCommodity = query.group('commodity')
 
-        if currentCommodity == "Fuel Ore":
-            pyautogui.typewrite("\n\n")
-            return True
-        else:
-            print("Unexpected commodity offer!")
-            return False
+            if currentCommodity == "Fuel Ore":
+                pyautogui.typewrite("\n\n")
+                return True
+            else:
+                print("Unexpected commodity offer!")
+                return False
+        elif port.oreAmt > 0:
+            result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
+            pyautogui.typewrite("0\n")
+
+    return True
+
 
     
 
@@ -681,6 +721,7 @@ def return_up_to(regex,logfile,unless=[]):
 # (False,MatchObject)
 def waitfor(regex,logfile,unless=[]):
     for line in logfile:
+        #print("read {0}".format(line))
         #print("Checking {0} for {1}".format(line, regex))
         #print(re.search(regex,line))
         regexMatch = re.search(regex,line)
@@ -707,10 +748,15 @@ def follow(filename):
         
         yield line
 
+def flush_follow():
+    # Reopens log file and starts following at EOF.
+    global INPUT_FILE, logfile
+    logfile = follow(INPUT_FILE)
+
 if __name__ == "__main__":
 
-    VERSION="1.12"
-    INPUT_FILE="C:\\temp\\tw2002a.log"
+    VERSION="1.2"
+    INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
