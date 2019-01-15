@@ -86,7 +86,7 @@ class Starport:
         
 
 def do_main_menu():
-    global DELAY_CHAR, DELAY, TYPESPEED, FAILSAFE, FAILSAFE_DISTANCE, INPUT_FILE, TRADE_LIMIT
+    global DELAY_CHAR, DELAY, TYPESPEED, FAILSAFE, FAILSAFE_DISTANCE, INPUT_FILE, TRADE_LIMIT, SHIP_HOLDS
     
     selection = None
     while True:
@@ -94,6 +94,7 @@ def do_main_menu():
         print("==== MAIN MENU====")
         print("l)  Set input log file (Currently: {0})".format(INPUT_FILE))
         print("tl) Set trade limit (Default: Stop when {0} turns left.)".format(TRADE_LIMIT))
+        print("sh) Set ship holds (Currently {0} holds)".format(SHIP_HOLDS))
         print("an) Auto-trade, NO haggling (CTRL-C to stop)")
         print("ay) Auto-trade, haggling (CTRL-C to stop)")
         print("ta) Trade Advisor")
@@ -122,6 +123,14 @@ def do_main_menu():
             TYPESPEED=float(input("Enter delay between keystrokes, in seconds (float value allowed): "))
         elif selection == "f":
             FAILSAFE = not FAILSAFE
+        elif selection == "sh":
+            print()
+            try:
+                SHIP_HOLDS = int(input("How many cargo holds does your ship have? "))
+            except:
+                print("Invalid value (number expected).  Restoring default.")
+                SHIP_HOLDS=85
+                sleep(1)
         elif selection == "tl":
             print()
             print("-- Set trade limit --")
@@ -193,12 +202,14 @@ def trade_advisor():
         pyautogui.click()
         
         pyautogui.typewrite("^")
+        waitfor("^:",logfile)
 
         # Create map of known universe, using Warp Display.
         pyautogui.typewrite("i")
         result,rawData = return_up_to("^:",logfile)
 
-        print(rawData)
+        #print("Raw warp data")
+        #print(rawData)
         
         rawDataList = rawData.split('\n')
         for line in rawDataList:
@@ -212,6 +223,7 @@ def trade_advisor():
         pyautogui.typewrite("r")
         result,rawData = return_up_to("^:",logfile)
 
+        #print("Raw port data")
         #print(rawData)
         
         rawDataList = rawData.split('\n')
@@ -282,7 +294,7 @@ def auto_trade(negotiate=False):
     # Given two sectors, will query ports and automatically trade the highest valuable commodities
     # that can be bought/sold between the pair.
     
-    global TRADE_LIMIT, commerceReportRe, logfile
+    global TRADE_LIMIT, SHIP_HOLDS, commerceReportRe, logfile
 
     print()
     print("Be sure your terminal program is logging printable output to {0} before continuing.".format(INPUT_FILE))
@@ -306,6 +318,13 @@ def auto_trade(negotiate=False):
     
         pyautogui.typewrite("d")
         waitfor("^Command ",logfile)
+        # For some reason Ship Info goes by too quickly to be picked up by follow generator.
+        # Kludge is to spam it a few times. Ugh.
+        pyautogui.typewrite("i")
+        pyautogui.typewrite("i")
+        pyautogui.typewrite("i")
+        pyautogui.typewrite("i")
+        pyautogui.typewrite("i")
         pyautogui.typewrite("i")
         pyautogui.typewrite("i")
         result,selfInfo = return_up_to("^Command ",logfile)
@@ -385,8 +404,8 @@ def auto_trade(negotiate=False):
         port1Buys = port1.selling.intersection(port2.buying)
         port2Buys = port2.selling.intersection(port1.buying)
 
-        #print(port1Buys)
-        #print(port2Buys)
+        print(port1Buys)
+        print(port2Buys)
 
         if not port1Buys and not port2Buys:
             print("There are no viable trade plans between these two ports!")
@@ -417,6 +436,28 @@ def auto_trade(negotiate=False):
                     return
             else:
                 print("Port depleted.  Auto-trading stopped.")
+                return
+
+
+            # Verify port 2 still has room to buy from port 1
+            noBuys = []
+            for commodity in port1Buys:
+                if commodity == "Fuel Ore" and port2.oreAmt < SHIP_HOLDS:
+                    noBuys.append("Fuel Ore")
+                    print("Not buying Fuel Ore -- not enough demand at other port")
+                if commodity == "Organics" and port2.orgAmt < SHIP_HOLDS:
+                    noBuys.append("Organics")
+                    print("Not buying Organics -- not enough demand at other port")
+                if commodity == "Equipment" and port2.equAmt < SHIP_HOLDS:                    
+                    noBuys.append("Equipment")
+                    print("Not buying Equipment -- not enough demand at other port")
+
+            for noBuyCommodity in noBuys:
+                port1Buys.remove(noBuyCommodity)
+
+            # Verify there are still commodies to trade, otherwise quit.
+            if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
+                print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
                 return
 
             if not trade_at_port(port1,port1Buys):
@@ -456,6 +497,27 @@ def auto_trade(negotiate=False):
                 print("Port depleted or we are carrying invalid cargo for this port.  Auto-trading stopped.")
                 return
 
+            # Verify port 1 still has room to buy from port 2
+            noBuys = []
+            for commodity in port2Buys:
+                if commodity == "Fuel Ore" and port1.oreAmt < SHIP_HOLDS:
+                    print("Not buying Fuel Ore -- not enough demand at other port")
+                    noBuys.append("Fuel Ore")
+                if commodity == "Organics" and port1.orgAmt < SHIP_HOLDS:
+                    print("Not buying Organics -- not enough demand at other port")
+                    noBuys.append("Organics")
+                if commodity == "Equipment" and port1.equAmt < SHIP_HOLDS:
+                    print("Not buying Equipment -- not enough demand at other port")
+                    noBuys.append("Equipment")
+
+            for noBuyCommodity in noBuys:
+                port2Buys.remove(noBuyCommodity)
+
+            # Verify there are still commodies to trade, otherwise quit.
+            if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
+                print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
+                return
+
             if not trade_at_port(port2,port2Buys):
                 print("Trade exception encountered. Auto-trading stopped.")
                 return
@@ -465,6 +527,7 @@ def auto_trade(negotiate=False):
 
             # Move back to port1 sector
             pyautogui.typewrite("m{0}\n".format(sector1))
+            
         
         
     except pyautogui.FailSafeException:
@@ -474,7 +537,7 @@ def auto_trade(negotiate=False):
 # Docks at port and performs trade.
 def trade_at_port(port,buys):
 
-    global logfile
+    global logfile, SHIP_HOLDS
 
     print(port)
     
@@ -500,17 +563,31 @@ def trade_at_port(port,buys):
             
     # If port is selling commodities.  If it is a Class 8 (BBB) port, just return, since nothing to buy.
     if buys:
-        # Even if we want to buy from port, make sure there is still inventory to buy!
+        # Even if we want to buy from port, make sure there is still a full cargo holds worth of inventory to buy!
+        noBuys = []
         for commodity in buys:
-            if commodity == "Equipment" and port.equAmt > 0:
-                continue
-            if commodity == "Organics" and port.orgAmt > 0:
-                continue
-            if commodity == "Fuel Ore" and port.oreAmt > 0:
-                continue
+            if commodity == "Equipment" and port.equAmt < SHIP_HOLDS:
+                noBuys.append("Equipment")
+            if commodity == "Organics" and port.orgAmt < SHIP_HOLDS:
+                noBuys.append("Organics")
+            if commodity == "Fuel Ore" and port.oreAmt < SHIP_HOLDS:
+                noBuys.append("Fuel Ore")
 
-            # No more inventory to buy, so quit port.
+        for noBuyCommodity in noBuys:
+            buys.remove(noBuyCommodity)
+
+        # No more inventory to buy, so quit port.
+        if not buys:
+            
             print("No more inventory to buy.  Quitting port.")
+            # Decline purchases from this port.
+            if "Fuel Ore" in port.selling and port.oreAmt > 0:
+                pyautogui.typewrite("0\n")
+            if "Organics" in port.selling and port.orgAmt > 0:
+                pyautogui.typewrite("0\n")
+            if "Equipment" in port.selling and port.equAmt > 0:
+                pyautogui.typewrite("0\n")
+            
             return True
 
         if query:
@@ -520,9 +597,19 @@ def trade_at_port(port,buys):
             print("No commodities offered (is our cargo hold full?).")
             return False
     else:
-        print("Port is Class 8, nothing to buy.  Done.")
+        print("Nothing to buy.  Done.")
+
+        # Decline purchases from this port.
+        if "Fuel Ore" in port.selling and port.oreAmt > 0:
+            pyautogui.typewrite("0\n")
+        if "Organics" in port.selling and port.orgAmt > 0:
+            pyautogui.typewrite("0\n")
+        if "Equipment" in port.selling and port.equAmt > 0:
+            pyautogui.typewrite("0\n")
+
         return True
-    
+            
+            
     # Only buy what we can sell at the other port, prioritizing equipment, organics, then ore.
     if "Equipment" in buys and port.equAmt > 0:
         print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
@@ -622,8 +709,8 @@ def follow(filename):
 
 if __name__ == "__main__":
 
-    VERSION="1.1"
-    INPUT_FILE="C:\\Temp\\tw2002a.log"
+    VERSION="1.12"
+    INPUT_FILE="C:\\temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
@@ -639,6 +726,8 @@ if __name__ == "__main__":
     CIMPortReportRe = "^ +(?P<CIMPortSector>[0-9]+) +(?P<oreStatus>-)? +(?P<oreAmt>[0-9]+) +(?P<orePct>[0-9]+)% +(?P<orgStatus>-)? +(?P<orgAmt>[0-9]+) +(?P<orgPct>[0-9]+)% +(?P<equStatus>-)? +(?P<equAmt>[0-9]+) +(?P<equPct>[0-9]+)%"
 
     logfile = follow(INPUT_FILE)
+
+    SHIP_HOLDS=85
 
 
     print("***** STAK - Trade Tool {0} *****".format(VERSION))
