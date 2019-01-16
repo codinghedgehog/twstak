@@ -93,11 +93,9 @@ def do_main_menu():
         print()
         print("==== MAIN MENU====")
         print("l)  Set input log file (Currently: {0})".format(INPUT_FILE))
-        print("tl) Set trade limit (Default: Stop when {0} turns left.)".format(TRADE_LIMIT))
-        print("sh) Set ship holds (Currently {0} holds)".format(SHIP_HOLDS))
-        print("an) Auto-trade, NO haggling (CTRL-C to stop)")
-        print("ay) Auto-trade, haggling (CTRL-C to stop)")
-        print("ta) Trade Advisor")
+        print("tl) Set trade limit (Default: Stop when {0} turns left.)".format(TRADE_LIMIT))        
+        print("at) Auto-trade, NO haggling (CTRL-C to stop)")
+        print("tav) Trade Advisor - View")
         print("tas) Trade Advisor - Save to file")
         print()
         print("b)  Begin following log file [Used for Debugging] (CTRL-C to stop)")
@@ -125,14 +123,6 @@ def do_main_menu():
             TYPESPEED=float(input("Enter delay between keystrokes, in seconds (float value allowed): "))
         elif selection == "f":
             FAILSAFE = not FAILSAFE
-        elif selection == "sh":
-            print()
-            try:
-                SHIP_HOLDS = int(input("How many cargo holds does your ship have? "))
-            except:
-                print("Invalid value (number expected).  Restoring default.")
-                SHIP_HOLDS=85
-                sleep(1)
         elif selection == "tl":
             print()
             print("-- Set trade limit --")
@@ -158,17 +148,12 @@ def do_main_menu():
             print()
             print(next(logfile))
                 
-        elif selection == "an":
+        elif selection == "at":
             try:                
                 auto_trade(False)
             except KeyboardInterrupt:
                 print("User aborted trade routine...")
-        elif selection == "ay":
-            try:                
-                auto_trade(True)
-            except KeyboardInterrupt:
-                print("User aborted trade routine...")
-        elif selection == "ta":
+        elif selection == "tav":
             try:
                 trade_advisor()
             except KeyboardInterrupt:
@@ -461,21 +446,36 @@ def auto_trade(negotiate=False):
                 return
 
 
-            # Verify port 2 still has room to buy from port 1
+            # Verify port 2 still has room to buy from port 1, note that OtherPort
+            # inventory is adjusted down by one SHIP_HOLDS worth of quantity, since
+            # we would've just sold that much while there.
             noBuys = []
             for commodity in port1Buys:
-                if commodity == "Fuel Ore" and port2.oreAmt < SHIP_HOLDS:
+                if commodity == "Fuel Ore" and port2.oreAmt - SHIP_HOLDS < SHIP_HOLDS:
                     noBuys.append("Fuel Ore")
                     print("Not buying Fuel Ore -- not enough demand at other port")
-                if commodity == "Organics" and port2.orgAmt < SHIP_HOLDS:
+                    
+                if commodity == "Organics" and port2.orgAmt - SHIP_HOLDS < SHIP_HOLDS:
                     noBuys.append("Organics")
                     print("Not buying Organics -- not enough demand at other port")
-                if commodity == "Equipment" and port2.equAmt < SHIP_HOLDS:                    
+                    
+                if commodity == "Equipment" and port2.equAmt - SHIP_HOLDS < SHIP_HOLDS:                    
                     noBuys.append("Equipment")
                     print("Not buying Equipment -- not enough demand at other port")
 
             for noBuyCommodity in noBuys:
                 port1Buys.remove(noBuyCommodity)
+
+            for commodity in port1Buys:
+                if commodity == "Fuel Ore":
+                    print("Other port is buying {0} Fuel Ore".format(port2.oreAmt))
+                    
+                if commodity == "Organics":
+                    print("Other port is buying {0} Organics".format(port2.orgAmt))
+                    
+                if commodity == "Equipment":
+                    print("Other port is buying {0} Equipment".format(port2.equAmt))
+                
 
             # Verify there are still commodies to trade, otherwise quit.
             if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
@@ -489,7 +489,8 @@ def auto_trade(negotiate=False):
             waitfor("^Command",logfile)
 
             # Move to port2 sector
-            print("Moving to sector {0}".format(sector2))
+            print()
+            print("===> Moving to sector {0}".format(sector2))
             turnsLeft = turnsLeft - turnsWarp
             if turnsLeft <= TRADE_LIMIT:
                 print("Trade limit reached.  Auto-trading stopped.")
@@ -520,21 +521,35 @@ def auto_trade(negotiate=False):
                 print("Port depleted or we are carrying invalid cargo for this port.  Auto-trading stopped.")
                 return
 
-            # Verify port 1 still has room to buy from port 2
+            # Verify port 1 still has room to buy from port 2, note that OtherPort
+            # inventory is adjusted down by one SHIP_HOLDS worth of quantity, since
+            # we would've just sold that much while there.
             noBuys = []
             for commodity in port2Buys:
-                if commodity == "Fuel Ore" and port1.oreAmt < SHIP_HOLDS:
+                if commodity == "Fuel Ore" and port1.oreAmt - SHIP_HOLDS < SHIP_HOLDS:
                     print("Not buying Fuel Ore -- not enough demand at other port")
                     noBuys.append("Fuel Ore")
-                if commodity == "Organics" and port1.orgAmt < SHIP_HOLDS:
+                    
+                if commodity == "Organics" and port1.orgAmt - SHIP_HOLDS < SHIP_HOLDS:
                     print("Not buying Organics -- not enough demand at other port")
                     noBuys.append("Organics")
-                if commodity == "Equipment" and port1.equAmt < SHIP_HOLDS:
+                    
+                if commodity == "Equipment" and port1.equAmt - SHIP_HOLDS < SHIP_HOLDS:
                     print("Not buying Equipment -- not enough demand at other port")
                     noBuys.append("Equipment")
-
+                    
             for noBuyCommodity in noBuys:
                 port2Buys.remove(noBuyCommodity)
+
+            for commodity in port2Buys:
+                if commodity == "Fuel Ore":
+                    print("Other port is buying {0} Fuel Ore".format(port1.oreAmt))
+                    
+                if commodity == "Organics":
+                    print("Other port is buying {0} Organics".format(port1.orgAmt))
+                    
+                if commodity == "Equipment":
+                    print("Other port is buying {0} Equipment".format(port1.equAmt))
 
             # Verify there are still commodies to trade, otherwise quit.
             if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
@@ -549,7 +564,8 @@ def auto_trade(negotiate=False):
             waitfor("^Command",logfile)
 
             # Move back to port1 sector
-            print("Moving to sector {0}".format(sector1))
+            print()
+            print("===> Moving to sector {0}".format(sector1))
             pyautogui.typewrite("m{0}\n".format(sector1))
             
         
@@ -755,7 +771,7 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.21"
+    VERSION="1.3"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
