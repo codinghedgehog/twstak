@@ -658,14 +658,15 @@ def trade_at_port(port,buys):
     # Only buy what we can sell at the other port, prioritizing equipment, organics, then ore,
     # but only if there is enough to fill our holds, otherwise decline purchase.
     if "Equipment" in buys:
-        if port.equAmt >= SHIP_HOLDS:
-            print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
+        if port.equAmt >= SHIP_HOLDS:            
             while currentCommodity != "Equipment":
                 pyautogui.typewrite("0\n")
                 result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
                 currentCommodity = query.group('commodity')
+                print("Port offers to sell {0}".format(currentCommodity))
 
             if currentCommodity == "Equipment":
+                print("We want to buy Equipment and port has {0} left.".format(port.equAmt))
                 pyautogui.typewrite("\n\n")
                 return True
             else:
@@ -676,14 +677,15 @@ def trade_at_port(port,buys):
             pyautogui.typewrite("0\n")
         
     if "Organics" in buys:
-        if port.orgAmt >= SHIP_HOLDS:
-            print("We want to buy Organics and port has {0} left.".format(port.orgAmt))
+        if port.orgAmt >= SHIP_HOLDS:            
             while currentCommodity != "Organics":
                 pyautogui.typewrite("0\n")
                 result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
                 currentCommodity = query.group('commodity')
+                print("Port offers to sell {0}".format(currentCommodity))
 
             if currentCommodity == "Organics":
+                print("We want to buy Organics and port has {0} left.".format(port.orgAmt))
                 pyautogui.typewrite("\n\n")
                 return True
             else:
@@ -694,14 +696,15 @@ def trade_at_port(port,buys):
             pyautogui.typewrite("0\n")
         
     if "Fuel Ore" in buys:
-        if port.oreAmt >= SHIP_HOLDS:
-            print("We want to buy Fuel Ore and port has {0} left.".format(port.oreAmt))
+        if port.oreAmt >= SHIP_HOLDS:            
             while currentCommodity != "Fuel Ore":
                 pyautogui.typewrite("0\n")
                 result,query = waitfor("How many holds of (?P<commodity>.+) do you want to buy",logfile)
                 currentCommodity = query.group('commodity')
+                print("Port offers to sell {0}".format(currentCommodity))
 
             if currentCommodity == "Fuel Ore":
+                print("We want to buy Fuel Ore and port has {0} left.".format(port.oreAmt))
                 pyautogui.typewrite("\n\n")
                 return True
             else:
@@ -776,7 +779,7 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.4"
+    VERSION="1.41"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
