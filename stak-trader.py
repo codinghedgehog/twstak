@@ -477,7 +477,7 @@ def auto_trade(negotiate=False):
                     print("Other port is buying {0} Equipment".format(port2.equAmt))
                 
 
-            # Verify there are still commodies to trade, otherwise quit.
+            # Verify there are still commodities to trade, otherwise quit.
             if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
                 print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
                 return
@@ -551,7 +551,7 @@ def auto_trade(negotiate=False):
                 if commodity == "Equipment":
                     print("Other port is buying {0} Equipment".format(port1.equAmt))
 
-            # Verify there are still commodies to trade, otherwise quit.
+            # Verify there are still commodities to trade, otherwise quit.
             if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
                 print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
                 return
@@ -566,8 +566,13 @@ def auto_trade(negotiate=False):
             # Move back to port1 sector
             print()
             print("===> Moving to sector {0}".format(sector1))
-            pyautogui.typewrite("m{0}\n".format(sector1))
-            
+            turnsLeft = turnsLeft - turnsWarp
+            if turnsLeft <= TRADE_LIMIT:
+                print("Trade limit reached.  Auto-trading stopped.")
+                return
+            else:
+                pyautogui.typewrite("m{0}\n".format(sector1))
+                waitfor("^Command",logfile)            
         
         
     except pyautogui.FailSafeException:
@@ -771,7 +776,7 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.3"
+    VERSION="1.4"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
