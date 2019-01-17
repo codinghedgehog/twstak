@@ -365,6 +365,23 @@ def auto_trade(negotiate=False):
         pyautogui.typewrite("c")
         waitfor("^Computer command",logfile)
 
+        # Verify ports are adjacent to each other.
+        pyautogui.typewrite("i{0}\n".format(sector1))
+        result,sectorWarps = waitfor("sector\(s\) : +(?P<warpLanes>.+)$",logfile,unless=["^You have never visited sector"])
+        if result and sector2 not in sectorWarps.group('warpLanes').split(' - '):
+            print("{0} and {1} are not adjacent sectors.".format(sector1, sector2))
+            return
+
+        waitfor("^Computer command",logfile)
+        
+        pyautogui.typewrite("i{0}\n".format(sector2))
+        result,sectorWarps = waitfor("sector\(s\) : +(?P<warpLanes>.+)$",logfile,unless=["^You have never visited sector"])
+        if result and sector1 not in sectorWarps.group('warpLanes').split(' - '):
+            print("{0} and {1} are not adjacent sectors.".format(sector1, sector2))
+            return
+
+        waitfor("^Computer command",logfile)
+
         # Get Port Reports
         pyautogui.typewrite("r")
         pyautogui.typewrite("{0}\n".format(sector1))
@@ -402,184 +419,134 @@ def auto_trade(negotiate=False):
             print("Unable to parse port data in sector {0}!".format(sector2))
             return
 
-        #print(port1)
-        #print(port2)
+        print(port1)
+        print(port2)
 
         # Validate there is a viable commodity trade between the two ports.
         port1Buys = port1.selling.intersection(port2.buying)
         port2Buys = port2.selling.intersection(port1.buying)
 
-        print(port1Buys)
-        print(port2Buys)
+        #print(port1Buys)
+        #print(port2Buys)
 
         if not port1Buys and not port2Buys:
             print("There are no viable trade plans between these two ports!")
             return
-
+        
         # Return to main prompt
         pyautogui.typewrite("q")
 
         flush_follow()
 
-        # Trade back and forth until depleted.
+        # Trade back and forth until depleted or trade limit is hit.
+        currentSector = sector1
+        currentPort = port1
+        currentBuys = port1Buys
+        otherSector = sector2
+        otherPort = port2
+        otherBuys = port2Buys
         while turnsLeft > TRADE_LIMIT:
             
             turnsLeft = turnsLeft - 1
+            print("{0} turns left.".format(turnsLeft))
 
             if turnsLeft <= TRADE_LIMIT:
                 print("Turn limit reached.  Auto-trading stopped.")
                 return
 
-            # Trade at port 1            
+            # Trade at current port.            
             pyautogui.typewrite("pt")
             
-            result,portInfo = return_up_to("You have",logfile,unless=["You don't have anything they want, and they don't have anything you can buy"])
+            result,portInfo = return_up_to("You have",logfile,unless=["You don't have anything they want, and they don't have anything you can buy"])            
             if result:
                 portReport = re.search(commerceReportRe,portInfo,flags=re.DOTALL)
                 if portReport:
-                    port1.update_inventory(portReport)                    
+                    currentPort.update_inventory(portReport)                    
                 else:
-                    print("Failed to update port1 inventory!")
+                    print("Failed to update port inventory in sector {0}!".format(currentSector))
                     return
             else:
                 print("Port depleted.  Auto-trading stopped.")
                 return
 
-
-            # Verify port 2 still has room to buy from port 1, note that OtherPort
+            # Verify other port still has room to buy from current port, note that OtherPort
             # inventory is adjusted down by one SHIP_HOLDS worth of quantity, since
             # we would've just sold that much while there.
             noBuys = []
-            for commodity in port1Buys:
-                if commodity == "Fuel Ore" and port2.oreAmt - SHIP_HOLDS < SHIP_HOLDS:
+            for commodity in currentBuys:
+                if commodity == "Fuel Ore" and otherPort.oreAmt - SHIP_HOLDS < SHIP_HOLDS:
                     noBuys.append("Fuel Ore")
                     print("Not buying Fuel Ore -- not enough demand at other port")
                     
-                if commodity == "Organics" and port2.orgAmt - SHIP_HOLDS < SHIP_HOLDS:
+                if commodity == "Organics" and otherPort.orgAmt - SHIP_HOLDS < SHIP_HOLDS:
                     noBuys.append("Organics")
                     print("Not buying Organics -- not enough demand at other port")
                     
-                if commodity == "Equipment" and port2.equAmt - SHIP_HOLDS < SHIP_HOLDS:                    
+                if commodity == "Equipment" and otherPort.equAmt - SHIP_HOLDS < SHIP_HOLDS:                    
                     noBuys.append("Equipment")
                     print("Not buying Equipment -- not enough demand at other port")
 
             for noBuyCommodity in noBuys:
-                port1Buys.remove(noBuyCommodity)
+                currentBuys.remove(noBuyCommodity)
 
-            for commodity in port1Buys:
+            for commodity in currentBuys:
                 if commodity == "Fuel Ore":
-                    print("Other port is buying {0} Fuel Ore".format(port2.oreAmt))
+                    print("Other port is buying {0} Fuel Ore".format(otherPort.oreAmt))
                     
                 if commodity == "Organics":
-                    print("Other port is buying {0} Organics".format(port2.orgAmt))
+                    print("Other port is buying {0} Organics".format(otherPort.orgAmt))
                     
                 if commodity == "Equipment":
-                    print("Other port is buying {0} Equipment".format(port2.equAmt))
+                    print("Other port is buying {0} Equipment".format(otherPort.equAmt))
                 
 
             # Verify there are still commodities to trade, otherwise quit.
-            if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
+            if not currentBuys.intersection(otherPort.buying) and not otherBuys.intersection(currentPort.buying):
                 print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
                 return
 
-            if not trade_at_port(port1,port1Buys):
+            if not trade_at_port(currentPort,currentBuys):
                 print("Trade exception encountered. Auto-trading stopped.")
                 return
             
-            waitfor("^Command",logfile)
+            #waitfor("^Command",logfile)
+            flush_follow()
 
-            # Move to port2 sector
+            # Move to other port sector
             print()
-            print("===> Moving to sector {0}".format(sector2))
+            print("===> Moving to sector {0}".format(otherSector))
             turnsLeft = turnsLeft - turnsWarp
+            print("{0} turns left.".format(turnsLeft))
             if turnsLeft <= TRADE_LIMIT:
                 print("Trade limit reached.  Auto-trading stopped.")
                 return
             else:
-                pyautogui.typewrite("m{0}\n".format(sector2))
+                pyautogui.typewrite("m{0}\n".format(otherSector))
                 waitfor("^Command",logfile)
-            
-            # Sell and Buy
-            turnsLeft = turnsLeft - 1
 
-            if turnsLeft <= TRADE_LIMIT:
-                print("Turn limit reached.  Auto-trading stopped.")
-                return
-
-            # Trade at port 2            
-            pyautogui.typewrite("pt")
-
-            result,portInfo = return_up_to("You have",logfile,unless=["You don't have anything they want, and they don't have anything you can buy"])
-            if result:
-                port2Report = re.search(commerceReportRe,portInfo,flags=re.DOTALL)
-                if port2Report:
-                    port2.update_inventory(port2Report)
-                else:
-                    print("Failed to update port2 inventory!")
-                    return
+            # Flip the trade pair
+            if currentSector == sector1:
+                currentSector = sector2
+                currentPort = port2
+                currentBuys = port2Buys
+                otherSector = sector1
+                otherPort = port1
+                otherBuys = port1Buys
             else:
-                print("Port depleted or we are carrying invalid cargo for this port.  Auto-trading stopped.")
-                return
-
-            # Verify port 1 still has room to buy from port 2, note that OtherPort
-            # inventory is adjusted down by one SHIP_HOLDS worth of quantity, since
-            # we would've just sold that much while there.
-            noBuys = []
-            for commodity in port2Buys:
-                if commodity == "Fuel Ore" and port1.oreAmt - SHIP_HOLDS < SHIP_HOLDS:
-                    print("Not buying Fuel Ore -- not enough demand at other port")
-                    noBuys.append("Fuel Ore")
-                    
-                if commodity == "Organics" and port1.orgAmt - SHIP_HOLDS < SHIP_HOLDS:
-                    print("Not buying Organics -- not enough demand at other port")
-                    noBuys.append("Organics")
-                    
-                if commodity == "Equipment" and port1.equAmt - SHIP_HOLDS < SHIP_HOLDS:
-                    print("Not buying Equipment -- not enough demand at other port")
-                    noBuys.append("Equipment")
-                    
-            for noBuyCommodity in noBuys:
-                port2Buys.remove(noBuyCommodity)
-
-            for commodity in port2Buys:
-                if commodity == "Fuel Ore":
-                    print("Other port is buying {0} Fuel Ore".format(port1.oreAmt))
-                    
-                if commodity == "Organics":
-                    print("Other port is buying {0} Organics".format(port1.orgAmt))
-                    
-                if commodity == "Equipment":
-                    print("Other port is buying {0} Equipment".format(port1.equAmt))
-
-            # Verify there are still commodities to trade, otherwise quit.
-            if not port1Buys.intersection(port2.buying) and not port2Buys.intersection(port1.buying):
-                print("No more tradable commodities at these ports, in any direction. Stopping auto-trade.")
-                return
-
-            if not trade_at_port(port2,port2Buys):
-                print("Trade exception encountered. Auto-trading stopped.")
-                return
-
-            pyautogui.typewrite("d")
-            waitfor("^Command",logfile)
-
-            # Move back to port1 sector
-            print()
-            print("===> Moving to sector {0}".format(sector1))
-            turnsLeft = turnsLeft - turnsWarp
-            if turnsLeft <= TRADE_LIMIT:
-                print("Trade limit reached.  Auto-trading stopped.")
-                return
-            else:
-                pyautogui.typewrite("m{0}\n".format(sector1))
-                waitfor("^Command",logfile)            
-        
+                currentSector = sector1
+                currentPort = port1
+                currentBuys = port1Buys
+                otherSector = sector2
+                otherPort = port2
+                otherBuys = port2Buys                
         
     except pyautogui.FailSafeException:
         print("** ABORTED: Fail safe triggered.")
         return
 
 # Docks at port and performs trade.
+# Port - Starport of current port being docked at
+# buys - Set of commodities to buy at Port
 def trade_at_port(port,buys):
 
     global logfile, SHIP_HOLDS
@@ -775,11 +742,13 @@ def follow(filename):
 def flush_follow():
     # Reopens log file and starts following at EOF.
     global INPUT_FILE, logfile
+    logfile.close()
+    del logfile
     logfile = follow(INPUT_FILE)
 
 if __name__ == "__main__":
 
-    VERSION="1.41"
+    VERSION="1.5"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
