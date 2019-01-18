@@ -14,6 +14,7 @@
 import sys
 import re
 import os
+import datetime
 import pyautogui
 from time import sleep
 
@@ -244,6 +245,9 @@ def trade_advisor(reportFile=None):
         # For each port, look to see if there are any adjacent ports that have a viable trade flow.
         portsDone = []
 
+        print("Report generated on {0}".format(datetime.datetime.strftime(datetime.datetime.today(),"%m/%d/%Y %H:%M:%S")),file=reportFile)
+        print("",file=reportFile)
+
         for portSector in portDB.keys():
             # Look for trade routes with adjacent ports.
             port1 = portDB[portSector]
@@ -285,6 +289,7 @@ def trade_advisor(reportFile=None):
                                 print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
 
                     print("",file=reportFile)
+        print("Done.")
         
         
     except pyautogui.FailSafeException:
@@ -308,7 +313,7 @@ def auto_trade(negotiate=False):
 
     x,y = get_term_coord()
 
-    yorn = input("Are you already at main command prompt? y/n ").lower()
+    yorn = input("Are you already at the main command prompt? y/n ").lower()
     if yorn != "y":
         print("Please be at the main command (NOT Computer) prompt before mapping.")
         return
@@ -446,7 +451,8 @@ def auto_trade(negotiate=False):
         otherPort = port2
         otherBuys = port2Buys
         while turnsLeft > TRADE_LIMIT:
-            
+
+            print("Docking...")
             turnsLeft = turnsLeft - 1
             print("{0} turns left.".format(turnsLeft))
 
@@ -736,7 +742,7 @@ def follow(filename):
         if not line:
             sleep(0.1)    # Sleep briefly
             continue
-        
+        #print("Yielding {0}".format(line))
         yield line
 
 def flush_follow():
@@ -748,7 +754,7 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.5"
+    VERSION="1.51"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
