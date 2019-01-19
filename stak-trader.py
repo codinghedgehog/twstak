@@ -19,6 +19,13 @@ import pyautogui
 from time import sleep
 
 
+class TradePair:
+
+    def __init__(self,port1,port2):
+
+        self.port1 = port1
+        self.port2 = port2
+
 # Takes a match object from commerceReportRe or CIMPortReportRe regex to initialize.
 class Starport:    
     
@@ -162,11 +169,9 @@ def do_main_menu():
         elif selection == "tas":
             try:
                 fileName = input("Enter path and filename to save: ")
-                try:                    
-                    with open(fileName,"w") as outFile:
-                        trade_advisor(reportFile=outFile)
-                except:
-                    print("Unable to open file {0} for writing!".format(fileName))
+                
+                with open(fileName,"w") as outFile:
+                    trade_advisor(reportFile=outFile)
                 
             except KeyboardInterrupt:
                 print("User aborted trade advisor...")            
@@ -182,7 +187,7 @@ def trade_advisor(reportFile=None):
     # Uses Computer Interrogation Mode to get list of explored sectors and port info, and advises
     # which port pairs are available.
 
-    global logfile, CIMPortReportRe
+    global logfile, CIMPortReportRe, TRADE_PAIRS
 
     warpMap = {}
     portDB = {}
@@ -245,9 +250,6 @@ def trade_advisor(reportFile=None):
         # For each port, look to see if there are any adjacent ports that have a viable trade flow.
         portsDone = []
 
-        print("Report generated on {0}".format(datetime.datetime.strftime(datetime.datetime.today(),"%m/%d/%Y %H:%M:%S")),file=reportFile)
-        print("",file=reportFile)
-
         for portSector in portDB.keys():
             # Look for trade routes with adjacent ports.
             port1 = portDB[portSector]
@@ -259,8 +261,13 @@ def trade_advisor(reportFile=None):
                         continue
                     
                     port2 = portDB[adjWarp]
+
+                    # Validate that the second port sector can warp BACK to the first sector,
+                    # since not all warps are two-directional in Tradewars.
+                    if not portSector in warpMap[adjWarp]:
+                        continue
                     
-                    # Validate there is a viable commodity trade between the two ports.
+                    # Validate there is a viable commodity to trade between the two ports.
                     port1Buys = port1.selling.intersection(port2.buying)
                     port2Buys = port2.selling.intersection(port1.buying)
 
@@ -271,30 +278,141 @@ def trade_advisor(reportFile=None):
                     if not port1Buys and not port2Buys:
                         continue
                     else:
-                        print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector),file=reportFile)
-                        for commodity in port1Buys:
-                            if commodity == "Fuel Ore":
-                                print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
-                            elif commodity == "Organics":
-                                print("  Organics (Selling {0}) -> Organics (Buying {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
-                            elif commodity == "Equipment":
-                                print("  Equipment (Selling {0}) -> Equipment (Buying {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
+                        TRADE_PAIRS.append(TradePair(port1,port2))
 
-                        for commodity in port2Buys:
-                            if commodity == "Fuel Ore":
-                                print("  Fuel Ore (Buying {0}) <- Fuel Ore (Selling {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
-                            elif commodity == "Organics":
-                                print("  Organics (Buying {0}) <- Organics (Selling {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
-                            elif commodity == "Equipment":
-                                print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
+        # Grade port trading pairs (A, B, C, D)
+        #
+        # Definition of graded port (from lowest to highest, inclusive of lower grade requirements):
+        # D. Default priority, can trade at least one commdity in one direction.
+        # C. All tradable Commodity amounts > 1000
+        # B. Bidirectional trading with at least two commodities
+        # A. Bidirection trading with Org and Equ specifically.
+        D_LIST = []
+        C_LIST = []
+        B_LIST = []
+        A_LIST = []
 
-                    print("",file=reportFile)
+        for portPair in TRADE_PAIRS:
+            
+            port1Buys = portPair.port1.selling.intersection(portPair.port2.buying)
+            port2Buys = portPair.port2.selling.intersection(portPair.port1.buying)
+
+            graded = False
+
+            # Populate D list (filter out ports with low inventory).
+            for commodity in port1Buys:
+
+                if graded:
+                    break
+                
+                if commodity == 'Fuel Ore' and (int(portPair.port1.oreAmt) < 1000 or int(portPair.port2.oreAmt) < 1000): 
+                    D_LIST.append(portPair)
+                    graded = True
+                    continue
+                elif commodity == 'Organics' and (int(portPair.port1.orgAmt < 1000) or int(portPair.port2.orgAmt) < 1000):
+                    D_LIST.append(portPair)                    
+                    graded = True
+                    continue
+                elif commodity == 'Equipment' and (int(portPair.port1.equAmt) < 1000 or int(portPair.port2.equAmt) < 1000):
+                    D_LIST.append(portPair)
+                    graded = True
+                    continue
+
+            if graded:
+                continue
+
+            for commodity in port2Buys:
+
+                if graded:
+                    break
+                
+                if commodity == 'Fuel Ore' and (int(portPair.port2.oreAmt) < 1000 or int(portPair.port1.oreAmt) < 1000):
+                    D_LIST.append(portPair)
+                    graded = True
+                    continue
+                elif commodity == 'Organics' and (int(portPair.port2.orgAmt) < 1000 or int(portPair.port1.orgAmt) < 1000):
+                    D_LIST.append(portPair)
+                    graded = True
+                    continue
+                elif commodity == 'Equipment' and (int(portPair.port2.equAmt) < 1000 or int(portPair.port1.equAmt) < 1000):
+                    D_LIST.append(portPair)
+                    graded = True
+                    continue
+                
+            if graded:
+                continue
+                
+            # Populate C list (filter out uni-directional trading pairs)
+            if not port1Buys or not port2Buys:
+                C_LIST.append(portPair)
+                continue
+
+            # Populate A & B lists
+            if 'Equipment' in port1Buys and 'Organics' in port2Buys:
+                A_LIST.append(portPair)
+            elif 'Organics' in port1Buys and 'Equipment' in port2Buys:
+                A_LIST.append(portPair)
+            else:
+                B_LIST.append(portPair)
+
+        # Print out report in order of priority
+        print("Report generated on {0}".format(datetime.datetime.strftime(datetime.datetime.today(),"%m/%d/%Y %H:%M:%S")),file=reportFile)
+        print("",file=reportFile)
+
+        print("=== GRADE A TRADE ROUTES ===",file=reportFile)
+        print("",file=reportFile)
+        print_port_pair_trade_list(A_LIST,reportFile)
+
+        print("",file=reportFile)
+        print("=== GRADE B TRADE ROUTES ===",file=reportFile)
+        print("",file=reportFile)
+        print_port_pair_trade_list(B_LIST,reportFile)
+        
+        print("",file=reportFile)
+        print("=== GRADE C TRADE ROUTES ===",file=reportFile)
+        print("",file=reportFile)
+        print_port_pair_trade_list(C_LIST,reportFile)
+
+        print("",file=reportFile)
+        print("=== GRADE D TRADE ROUTES ===",file=reportFile)
+        print("",file=reportFile)
+        print_port_pair_trade_list(D_LIST,reportFile)
+
+        print("",file=reportFile)
         print("Done.")
         
         
     except pyautogui.FailSafeException:
         print("** ABORTED: Fail safe triggered.")
         return
+
+def print_port_pair_trade_list(portPairList,reportFile):
+    
+    for portPair in portPairList:
+        port1 = portPair.port1
+        port2 = portPair.port2
+
+        port1Buys = portPair.port1.selling.intersection(portPair.port2.buying)
+        port2Buys = portPair.port2.selling.intersection(portPair.port1.buying)
+
+        print("",file=reportFile)
+        print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector),file=reportFile)
+        for commodity in port1Buys:
+            if commodity == "Fuel Ore":
+                print("  Fuel Ore (Selling {0}) -> Fuel Ore (Buying {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
+            elif commodity == "Organics":
+                print("  Organics (Selling {0}) -> Organics (Buying {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
+            elif commodity == "Equipment":
+                print("  Equipment (Selling {0}) -> Equipment (Buying {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
+
+        for commodity in port2Buys:
+            if commodity == "Fuel Ore":
+                print("  Fuel Ore (Buying {0}) <- Fuel Ore (Selling {1})".format(port1.oreAmt,port2.oreAmt),file=reportFile)
+            elif commodity == "Organics":
+                print("  Organics (Buying {0}) <- Organics (Selling {1})".format(port1.orgAmt,port2.orgAmt),file=reportFile)
+            elif commodity == "Equipment":
+                print("  Equipment (Buying {0}) <- Equipment (Selling {1})".format(port1.equAmt,port2.equAmt),file=reportFile)
+
     
 
 def auto_trade(negotiate=False):
@@ -736,7 +854,7 @@ def waitfor(regex,logfile,unless=[]):
 
 def follow(filename):
     thefile = open(filename,"r")
-    thefile.seek(0,2)      # Go to the end of the file
+    thefile.seek(0,2)      # Go to the end of the file    
     while True:
         line = thefile.readline()
         if not line:
@@ -750,11 +868,12 @@ def flush_follow():
     global INPUT_FILE, logfile
     logfile.close()
     del logfile
+    #print("Reopening file...")
     logfile = follow(INPUT_FILE)
 
 if __name__ == "__main__":
 
-    VERSION="1.51"
+    VERSION="1.6"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
@@ -765,6 +884,9 @@ if __name__ == "__main__":
     FAILSAFE=True
 
     TRADE_LIMIT=40
+
+    # Holds a list of TradePairs
+    TRADE_PAIRS = []
 
     commerceReportRe = "Fuel Ore +(?P<oreStatus>Buying|Selling) +(?P<oreAmt>[0-9]+) .+Organics +(?P<orgStatus>Buying|Selling) +(?P<orgAmt>[0-9]+) .+Equipment +(?P<equStatus>Buying|Selling) +(?P<equAmt>[0-9]+) "
 
