@@ -8,7 +8,7 @@
 # Note that this requires the user to be saving the terminal output to
 # a log file for real-time parsing.
 #
-# Uses: pyautogui
+# Uses: pyautogui, pygtail
 #
 
 import sys
@@ -16,6 +16,7 @@ import re
 import os
 import datetime
 import pyautogui
+from pygtail import Pygtail
 from time import sleep
 
 
@@ -94,7 +95,7 @@ class Starport:
         
 
 def do_main_menu():
-    global DELAY_CHAR, DELAY, TYPESPEED, FAILSAFE, FAILSAFE_DISTANCE, INPUT_FILE, TRADE_LIMIT, SHIP_HOLDS
+    global DELAY_CHAR, DELAY, TYPESPEED, FAILSAFE, INPUT_FILE, TRADE_LIMIT, SHIP_HOLDS, logfile
     
     selection = None
     while True:
@@ -120,7 +121,10 @@ def do_main_menu():
         if selection == "l":
             INPUT_FILE=input("File to monitor: ")
             if not os.path.isfile(INPUT_FILE):
-                print("WARNING: File {0} does not exist (yet?).".format(INPUT_FILE))        
+                print("WARNING: File {0} does not exist (yet?).".format(INPUT_FILE))
+            else:
+                logfile = Pygtail(INPUT_FILE,read_at_end=True, copytruncate = False, offset_file="NUL")
+                logfile.readlines() # Skip to end (should already happen, but just in case).
         elif selection == "q" or selection == "Q":
             sys.exit(0)
         elif selection == "dc":
@@ -590,7 +594,7 @@ def auto_trade(negotiate=False):
                     print("Failed to update port inventory in sector {0}!".format(currentSector))
                     return
             else:
-                print("Port depleted.  Auto-trading stopped.")
+                print("Nothing to buy or sell.  Port depleted?  Auto-trading stopped.")
                 return
 
             # Verify other port still has room to buy from current port, note that OtherPort
@@ -696,6 +700,9 @@ def trade_at_port(port,buys):
                 commodity = query.group('commodity')
                 print("Selling {0}".format(commodity))
                 pyautogui.typewrite("\n\n")
+    elif not result and query.string.fine("Command") >= 0:
+        print("Port kicked us out! Wrong cargo in holds?")
+        return False
             
     # If port is selling commodities.  If it is a Class 8 (BBB) port, just return, since nothing to buy.
     if buys:
@@ -816,71 +823,61 @@ def trade_at_port(port,buys):
 # in which case it will return (False,collectedLines).
 def return_up_to(regex,logfile,unless=[]):
     output = ""
-    for line in logfile:
-        output = output + line
-        
-        #print("Checking {0} for {1}".format(line, regex))
-        #print(re.search(regex,line))
+    while True:
+        for line in logfile:
+            
+            output = output + line
+            
+            #print("Checking {0} for {1}".format(line, regex))
+            #print(re.search(regex,line))
 
-        # Check exceptions
-        for unlessPattern in unless:            
-            if  re.search(unlessPattern,line):
-                return (False,output)
-        
-        if re.search(regex,line):
-            return (True,output)
+            # Check exceptions
+            for unlessPattern in unless:            
+                if  re.search(unlessPattern,line):
+                    return (False,output)
+            
+            if re.search(regex,line):
+                return (True,output)
+        sleep(0.1)
     
 
 # Consumes lines from logfile until regex matches and returns (True,MatchObject), or
 # if a pattern in the "unless" list of regexes is matched, in which case it returns the
 # (False,MatchObject)
 def waitfor(regex,logfile,unless=[]):
-    for line in logfile:
-        #print("read {0}".format(line))
-        #print("Checking {0} for {1}".format(line, regex))
-        #print(re.search(regex,line))
-        regexMatch = re.search(regex,line)
-        if regexMatch:
-            return (True,regexMatch)
-
-        # Check exceptions
-        for unlessPattern in unless:
-            #print("Checking {0} for {1}".format(line, unlessPattern))
-            #print(re.search(regex,line))
-            
-            regexMatch = re.search(unlessPattern,line)
-            if regexMatch:
-                return (False,regexMatch)
-
-def follow(filename):
-    thefile = open(filename,"r")
-    thefile.seek(0,2)      # Go to the end of the file    
     while True:
-        line = thefile.readline()
-        if not line:
-            sleep(0.1)    # Sleep briefly
-            continue
-        #print("Yielding {0}".format(line))
-        yield line
+        for line in logfile:
+            #print("read {0}".format(line))
+            #print("Checking {0} for {1}".format(line, regex))
+            #print(re.search(regex,line))
+            regexMatch = re.search(regex,line)
+            if regexMatch:
+                return (True,regexMatch)
+
+            # Check exceptions
+            for unlessPattern in unless:
+                #print("Checking {0} for {1}".format(line, unlessPattern))
+                #print(re.search(regex,line))
+                
+                regexMatch = re.search(unlessPattern,line)
+                if regexMatch:
+                    return (False,regexMatch)
+        sleep(0.1)
 
 def flush_follow():
     # Reopens log file and starts following at EOF.
-    global INPUT_FILE, logfile
-    logfile.close()
-    del logfile
-    #print("Reopening file...")
-    logfile = follow(INPUT_FILE)
+    global INPUT_FILE, logfile    
+    logfile.readlines()
 
 if __name__ == "__main__":
 
-    VERSION="1.6"
+    VERSION="1.7"
     INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
     DELAY=1
 
-    FAILSAFE_DISTANCE=10
     FAILSAFE=True
 
     TRADE_LIMIT=40
@@ -892,9 +889,13 @@ if __name__ == "__main__":
 
     CIMPortReportRe = "^ +(?P<CIMPortSector>[0-9]+) +(?P<oreStatus>-)? +(?P<oreAmt>[0-9]+) +(?P<orePct>[0-9]+)% +(?P<orgStatus>-)? +(?P<orgAmt>[0-9]+) +(?P<orgPct>[0-9]+)% +(?P<equStatus>-)? +(?P<equAmt>[0-9]+) +(?P<equPct>[0-9]+)%"
 
-    logfile = follow(INPUT_FILE)
+    # Note, we pass NUL a the filename to Pygtail because we DON'T want a persistent offset file,
+    # we want Pygtail to always start at the end of the terminal log file.  This is especially
+    # important if the log file is overwritten with each new session.
+    logfile = Pygtail(INPUT_FILE,read_from_end = True, copytruncate = False, offset_file = "NUL")
+    logfile.readlines()
 
-    SHIP_HOLDS=85
+    SHIP_HOLDS=50 # This will be updated once we get selfShip info later.
 
 
     print("***** STAK - Trade Tool {0} *****".format(VERSION))
