@@ -20,6 +20,7 @@ from pygtail import Pygtail
 from time import sleep
 
 
+# Just a container class to hold pairs of ports for easier referencing during reporting.
 class TradePair:
 
     def __init__(self,port1,port2):
@@ -363,20 +364,24 @@ def trade_advisor(reportFile=None):
         print("Report generated on {0}".format(datetime.datetime.strftime(datetime.datetime.today(),"%m/%d/%Y %H:%M:%S")),file=reportFile)
         print("",file=reportFile)
 
+        print("",file=reportFile)
         print("=== GRADE A TRADE ROUTES ===",file=reportFile)
         print("",file=reportFile)
         print_port_pair_trade_list(A_LIST,reportFile)
 
+        print("",file=reportFile)
         print("",file=reportFile)
         print("=== GRADE B TRADE ROUTES ===",file=reportFile)
         print("",file=reportFile)
         print_port_pair_trade_list(B_LIST,reportFile)
         
         print("",file=reportFile)
+        print("",file=reportFile)
         print("=== GRADE C TRADE ROUTES ===",file=reportFile)
         print("",file=reportFile)
         print_port_pair_trade_list(C_LIST,reportFile)
 
+        print("",file=reportFile)
         print("",file=reportFile)
         print("=== GRADE D TRADE ROUTES ===",file=reportFile)
         print("",file=reportFile)
@@ -398,7 +403,7 @@ def print_port_pair_trade_list(portPairList,reportFile):
 
         port1Buys = portPair.port1.selling.intersection(portPair.port2.buying)
         port2Buys = portPair.port2.selling.intersection(portPair.port1.buying)
-
+        
         print("",file=reportFile)
         print("Sector {0} <-> Sector {1}\n".format(port1.sector,port2.sector),file=reportFile)
         for commodity in port1Buys:
@@ -818,9 +823,9 @@ def trade_at_port(port,buys):
     
 
 # Saves lines from logfile until a line matches
-# either regex, which will return (True,collectedLines),
-# or one of the expressions in the "unless" variable,
-# in which case it will return (False,collectedLines).
+# either the regex parameter, which will return (True,output),
+# or one of the expressions in the "unless" list variable,
+# in which case it will return (False,output).
 def return_up_to(regex,logfile,unless=[]):
     output = ""
     while True:
@@ -842,8 +847,8 @@ def return_up_to(regex,logfile,unless=[]):
     
 
 # Consumes lines from logfile until regex matches and returns (True,MatchObject), or
-# if a pattern in the "unless" list of regexes is matched, in which case it returns the
-# (False,MatchObject)
+# if a pattern in the "unless" list of regexes is matched, it returns the
+# (False,MatchObject) tuple instead.
 def waitfor(regex,logfile,unless=[]):
     while True:
         for line in logfile:
@@ -872,7 +877,7 @@ def flush_follow():
 if __name__ == "__main__":
 
     VERSION="1.7"
-    INPUT_FILE="C:\\Temp\\tw2002a.log"
+    INPUT_FILE="C:\\Users\\hermitcello\\desktop\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
