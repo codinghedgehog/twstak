@@ -28,3 +28,8 @@ This is a Python 3 (3.6) script based on TWSTAK that performs paired port tradin
 It also comes with a trade advisor feature, which queries known ports and finds viable port pairs for trading.
 
 NOTE: This requires your terminal program to log printable output to a file for the script to read.
+
+# tw_port_report
+Tradewars Port Report
+
+This is a standalone Python script that can read in a previously saved output of the Computer Interrogation Mode's Warp and Port report and generate the same trade advisor output as from the twstak-trader script.  Basically this is an offline (file-based) version of the twstak-trader's trade advisor feature.
