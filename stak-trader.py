@@ -1,12 +1,13 @@
 # Simple TradeWars2002 Automatic Keypresser (STAK) - Trade Utility
 #
 # This is an "intelligent" auto-keyer setup for doing paired port
-# trading.  In automatic mode, it will accept two sectors as input,
-# and automatically figure out the most valuable commodities to trade
-# between the two ports of the sector, if possible.
+# trading and other common tasks.  In automatic trading mode, it will
+# accept two sectors as input, and automatically figure out the most
+# valuable commodities to trade between the two ports of the sector,
+# if possible.
 #
 # Note that this requires the user to be saving the terminal output to
-# a log file for real-time parsing.
+# a log file for real-time server response parsing.
 #
 # Uses: pyautogui, pygtail
 #
@@ -100,14 +101,19 @@ def do_main_menu():
     
     selection = None
     while True:
-        print()
         print("==== MAIN MENU====")
+        print()
+        print("-- Trade Operations --")
         print("l)  Set input log file (Currently: {0})".format(INPUT_FILE))
         print("tl) Set trade limit (Default: Stop when {0} turns left.)".format(TRADE_LIMIT))        
         print("at) Auto-trade, NO haggling (CTRL-C to stop)")
         print("tav) Trade Advisor - View")
         print("tas) Trade Advisor - Save to file")
         print()
+        print ("-- Other Tasks --")
+        print("mc) Move colonists from one commodity to another")
+        print()
+        print("-- Settings --")
         print("b)  Begin following log file [Used for Debugging] (CTRL-C to stop)")
         print("g)  Get next line in log file [Used for Debugging]")
         print("dc) Set macro delay char (Currently: {0})".format(DELAY_CHAR))
@@ -179,7 +185,12 @@ def do_main_menu():
                     trade_advisor(reportFile=outFile)
                 
             except KeyboardInterrupt:
-                print("User aborted trade advisor...")            
+                print("User aborted trade advisor...")
+        elif selection == "mc":
+            try:                
+                move_colonists()
+            except KeyboardInterrupt:
+                print("User aborted colonist move routine...")            
         else:
             print("Unknown selection '{0}'".format(selection))
 
@@ -188,7 +199,159 @@ def get_term_coord():
     mouse_x,mouse_y = pyautogui.position()
     return (mouse_x,mouse_y)
 
+def move_colonists():
+    global logfile
+    
+    print()
+    print("Be sure your terminal program is logging printable output to {0} before continuing.".format(INPUT_FILE))
+    print()
+
+    from_commodity = int(input("Move colonists FROM which commodity? (1 = Ore, 2 = Org, 3 = Equ) "))
+    if not from_commodity in [1,2,3]:
+        print("Invalid selection.")
+        return
+
+    to_commodity = int(input("Move colonists TO which commodity? (1 = Ore, 2 = Org, 3 = Equ) "))
+    if not to_commodity in [1,2,3]:
+        print("Invalid selection.")
+        return
+
+    num_transfer_colonists = int(input("How many colonists to transfer? "))    
+
+    x,y = get_term_coord()
+
+    yorn = input("Are you already at the main Planet command (NOT citadel) prompt? y/n ").lower()
+    if yorn != "y":
+        print("Please be at the planet command (NOT citadel) prompt before mapping.")
+        return
+
+    try:
+        flush_follow()
+
+        pyautogui.moveTo(x,y)
+        pyautogui.click()
+
+        # Get commodity population
+        pyautogui.typewrite("D")
+        result,planetData = return_up_to("^Fighters",logfile)
+
+        oreLevel = 0
+        orgLevel = 0
+        equLevel = 0
+
+        for line in planetData.split('\n'):
+            fuelMatch = re.search("^Fuel Ore\s+(?P<ore_level>[0-9,]+)\s",line)
+            if fuelMatch:
+                oreLevel = int(fuelMatch.group('ore_level').replace(",",""))
+                
+            orgMatch = re.search("^Organics\s+(?P<org_level>[0-9,]+)\s",line)
+            if orgMatch:
+                orgLevel = int(orgMatch.group('org_level').replace(",",""))
+
+            equMatch = re.search("^Equipment\s+(?P<equ_level>[0-9,]+)\s",line)
+            if equMatch:
+                equLevel = int(equMatch.group('equ_level').replace(",",""))
+
+        # Match user commodity input (1,2,3) to index into current commodity levels on planet.
+        commodityLevelList = [None,oreLevel,orgLevel,equLevel]
+
+        flush_follow()
+
+        colonistsMoved = 0
+        holdsNum = None
+        colHolds = None
+
+        # Find starting free holds available to move colonists.
+        pyautogui.typewrite("/")
+        result,shipData = return_up_to("Ship [0-9]+",logfile)
+        
+        colHoldsMatch = re.search(".+Hlds (?P<totalHolds>[0-9]+).?Ore (?P<oreHolds>[0-9]+).+Org (?P<orgHolds>[0-9]+).?Equ (?P<equHolds>[0-9]+).?Col (?P<colNum>[0-9]+)",shipData,flags = re.DOTALL)
+        if colHoldsMatch:
+            holdsNum = int(colHoldsMatch.group('totalHolds'))
+
+            # Find number of free holds, if there are commodities taking up space (ideally not).
+            holdsNum = holdsNum - int(colHoldsMatch.group('oreHolds')) - int(colHoldsMatch.group('orgHolds')) - int(colHoldsMatch.group('equHolds'))
+
+            # Find how many colonists are already in holds.
+            colHolds = int(colHoldsMatch.group('colNum'))            
+                
+        else:
+            print("Unable to parse hold data!")
+            return
+
+        if holdsNum == 0:
+            print("No free holds to move colonists!")
+            return        
+
+        while colonistsMoved < num_transfer_colonists:
+            
+            if commodityLevelList[from_commodity] <= 0:
+                print("No more colonists to move!")
+                return
+
+            # Take colonists
+            pyautogui.typewrite("S")
+            pyautogui.typewrite("N")
+            pyautogui.typewrite("T")
+            pyautogui.typewrite(str(from_commodity))
+
+            if holdsNum > (num_transfer_colonists - colonistsMoved):
+                pyautogui.typewrite("{0}\n".format(int(num_transfer_colonists - colonistsMoved)))
+            else:
+                pyautogui.typewrite("\n")                
+                
+            result,line = waitfor("^The Colonists file aboard your ship",logfile,unless=["\[0\] empty holds","There aren't that many on the planet!"])
+
+            if not result and line.string == "There aren't that many on the planet!":
+                print("Colonists depleted from source commodity!")
+                return            
+
+            flush_follow()
+
+            # Query number of colonists loaded.
+            pyautogui.typewrite("/")
+            result,shipData = return_up_to("Ship [0-9]+",logfile)
+            
+            colHoldsMatch = re.search(".+Col (?P<colNum>[0-9]+)",shipData,flags = re.DOTALL)
+            if colHoldsMatch:
+                # Find how many colonists are in holds.
+                colHolds = int(colHoldsMatch.group('colNum'))
+            else:
+                print("Unable to verify colonist count!")
+                return
+
+            print("Picked up {0} colonists from commodity {1}".format(str(colHolds),str(from_commodity)))
+
+            if colHolds == 0:
+                print("No free holds for moving colonists!")
+                return
+
+            flush_follow()
+
+            # Place colonists
+            pyautogui.typewrite("S")
+            pyautogui.typewrite("N")
+            pyautogui.typewrite("L")
+            pyautogui.typewrite(str(to_commodity))
+            pyautogui.typewrite("\n")
+            result,line = waitfor("^The Colonists disembark",logfile)
+
+            commodityLevelList[from_commodity] = commodityLevelList[from_commodity] - colHolds
+            commodityLevelList[to_commodity] = commodityLevelList[to_commodity] + colHolds
+
+            colonistsMoved = colonistsMoved + colHolds
+
+            print("Left {0} colonists on commodity {1}".format(str(colHolds),str(to_commodity)))
+            print("{0} colonists transfered so far.".format(str(colonistsMoved)))
+            
+
+    except pyautogui.FailSafeException:
+        print("** ABORTED: Fail safe triggered.")
+        return
+
+
 def trade_advisor(reportFile=None):
+    
     # Uses Computer Interrogation Mode to get list of explored sectors and port info, and advises
     # which port pairs are available.
 
@@ -876,8 +1039,8 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.7"
-    INPUT_FILE="C:\\Temp\\tw2002a.log"
+    VERSION="1.8"
+    INPUT_FILE="C:\\temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
