@@ -265,7 +265,7 @@ def move_colonists():
         pyautogui.typewrite("/")
         result,shipData = return_up_to("Ship [0-9]+",logfile)
         
-        colHoldsMatch = re.search(".+Hlds (?P<totalHolds>[0-9]+).?Ore (?P<oreHolds>[0-9]+).+Org (?P<orgHolds>[0-9]+).?Equ (?P<equHolds>[0-9]+).?Col (?P<colNum>[0-9]+)",shipData,flags = re.DOTALL)
+        colHoldsMatch = re.search(".+Hlds (?P<totalHolds>[0-9]+)( ?| +)Ore (?P<oreHolds>[0-9]+)( ?| +)Org (?P<orgHolds>[0-9]+)(.?|.+)Equ (?P<equHolds>[0-9]+)( ?| +)Col (?P<colNum>[0-9]+)",shipData,flags = re.DOTALL)
         if colHoldsMatch:
             holdsNum = int(colHoldsMatch.group('totalHolds'))
 
@@ -359,6 +359,7 @@ def trade_advisor(reportFile=None):
 
     warpMap = {}
     portDB = {}
+    TRADE_PAIRS = []
     
     print()
     print("Be sure your terminal program is logging printable output to {0} before continuing.".format(INPUT_FILE))
@@ -1039,8 +1040,8 @@ def flush_follow():
 
 if __name__ == "__main__":
 
-    VERSION="1.8"
-    INPUT_FILE="C:\\temp\\tw2002a.log"
+    VERSION="2.0"
+    INPUT_FILE="C:\\Users\\hermitcello\\desktop\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
