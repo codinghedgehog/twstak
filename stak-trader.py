@@ -1041,7 +1041,7 @@ def flush_follow():
 if __name__ == "__main__":
 
     VERSION="2.0"
-    INPUT_FILE="C:\\Users\\hermitcello\\desktop\\tw2002a.log"
+    INPUT_FILE="C:\\Temp\\tw2002a.log"
         
     TYPESPEED=0.05
     DELAY_CHAR="`"
