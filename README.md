@@ -1,4 +1,4 @@
-# twstak
+# stak
 TradeWars 2002 Simple Telnet Auto Keyer (macro app)
 
 Prereqs: Pyautogui
@@ -9,7 +9,7 @@ WARNING: IT IS FINICKY -- You MUST NOT move the TW2002 term window once you've d
 
 NOTE: To abort the macro/app, move your mouse to the upper left most corner of the screen.  That's the failsafe.
 
-# twstak-explorer
+# stak-explorer
 TradeWars 2002 Simple Telnet Auto Keyer (Explorer app)
 
 Prereqs: Pyautogui
@@ -18,7 +18,7 @@ This is a Python 3 (3.6) script based on TWSTAK that reads scans your Explored/U
 
 NOTE: This requires your terminal program to log printable output to a file for the script to read.
 
-# twstak-trader
+# stak-trader
 TradeWars 2002 Simple Telnet Auto Keyer (Trader app)
 
 Prereqs: Pyautogui, Pygtail
