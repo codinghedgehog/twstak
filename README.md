@@ -33,3 +33,12 @@ NOTE: This requires your terminal program to log printable output to a file for 
 Tradewars Port Report
 
 This is a standalone Python script that can read in a previously saved output of the Computer Interrogation Mode's Warp and Port report and generate the same trade advisor output as from the twstak-trader script.  Basically this is an offline (file-based) version of the twstak-trader's trade advisor feature.
+
+# stak-port-report-by-commodity.py
+TradeWars 2002 Simple Telnet Auto Keyer (Port Report by Commodity app)
+
+Prereqs: Pyautogui, Pygtail
+
+This is a Python 3 (3.6) script based on TWSTAK that queries the known ports of a player's universe and sorts them by commodities bought and orders them by amount of commodities bought.  This is useful for planning destinations when doing planetary twarp trading.
+
+
