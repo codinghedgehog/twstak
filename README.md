@@ -34,7 +34,7 @@ Tradewars Port Report
 
 This is a standalone Python script that can read in a previously saved output of the Computer Interrogation Mode's Warp and Port report and generate the same trade advisor output as from the twstak-trader script.  Basically this is an offline (file-based) version of the twstak-trader's trade advisor feature.
 
-# stak-port-report-by-commodity.py
+# stak-port-report-by-commodity
 TradeWars 2002 Simple Telnet Auto Keyer (Port Report by Commodity app)
 
 Prereqs: Pyautogui, Pygtail
